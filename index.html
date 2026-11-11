@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex">
+<title>Marylou · Éclipse à Tanger</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Ccircle cx='16' cy='16' r='9' fill='%23000' stroke='%23e2c287' stroke-width='2.4'/%3E%3C/svg%3E">
+<style>
+:root{--noir:#000;--or:#d9b77a;--or-clair:#f3dfb2;--texte:#e9dcc3;--doux:#9c8a6a;--serif:"Didot","Bodoni 72","Cormorant Garamond",Georgia,"Times New Roman",serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--noir);color:var(--texte)}
+body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+
+#accueil{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2rem;
+  padding:max(2rem,env(safe-area-inset-top)) 16px max(2rem,env(safe-area-inset-bottom));text-align:center;position:relative;z-index:2}
+.eclipse{width:min(46vw,210px);aspect-ratio:1;border-radius:50%;background:#000;position:relative;
+  box-shadow:0 0 0 1.5px var(--or-clair),0 0 16px 3px rgba(240,200,130,.55),0 0 56px 16px rgba(214,165,95,.22),0 0 140px 44px rgba(214,165,95,.08);
+  animation:souffle 7s ease-in-out infinite}
+.eclipse::after{content:"";position:absolute;top:9%;right:9%;width:7px;height:7px;border-radius:50%;background:#fff6e2;
+  box-shadow:0 0 10px 4px rgba(255,236,196,.8),0 0 30px 10px rgba(240,200,130,.35);opacity:.85}
+@keyframes souffle{50%{box-shadow:0 0 0 1.5px var(--or-clair),0 0 20px 5px rgba(240,200,130,.62),0 0 70px 22px rgba(214,165,95,.26),0 0 170px 54px rgba(214,165,95,.1)}}
+@media (prefers-reduced-motion:reduce){.eclipse{animation:none}}
+
+h1{margin:0;font-family:var(--serif);font-weight:400;letter-spacing:.06em;line-height:1.2;color:var(--or-clair)}
+h1 .voeux{display:block;margin-bottom:.45rem;font-size:clamp(1rem,4.8vw,1.3rem);letter-spacing:.2em;text-transform:uppercase;color:var(--or)}
+h1 .nom{display:block;font-size:clamp(2rem,10vw,2.8rem);letter-spacing:.14em;text-transform:uppercase}
+.actions{display:flex;flex-direction:column;align-items:center;gap:.9rem;width:100%;max-width:320px}
+.btn{width:100%;min-height:52px;padding:.8rem 1.4rem;border-radius:999px;border:1px solid var(--or);background:transparent;color:var(--or-clair);
+  letter-spacing:.14em;text-transform:uppercase;font-size:.85rem;transition:background .2s,color .2s}
+.btn.principal{background:linear-gradient(180deg,#ecd29d,#c99e5c);border-color:transparent;color:#140f06;font-weight:600}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn:focus-visible{outline:2px solid var(--or-clair);outline-offset:3px}
+#status{min-height:1.5em;margin:0;max-width:320px;font-size:.92rem;color:var(--doux)}
+.note{margin:0;font-size:.8rem;letter-spacing:.08em;color:var(--doux)}
+
+/* lecteur vidéo */
+#lecteur{position:fixed;inset:0;z-index:20;background:#000;display:flex;align-items:center;justify-content:center}
+#video{width:100%;height:100%;object-fit:contain;background:#000}
+.fermer{position:absolute;top:max(12px,env(safe-area-inset-top));right:12px;width:44px;height:44px;border-radius:50%;
+  border:1px solid rgba(217,183,122,.5);background:rgba(0,0,0,.55);color:var(--or-clair);font-size:1.4rem;line-height:1}
+#fin{position:absolute;left:16px;right:16px;bottom:max(24px,env(safe-area-inset-bottom));display:flex;gap:.8rem;justify-content:center}
+#fin .btn{max-width:180px;background:rgba(0,0,0,.6)}
+#fin .btn.principal{background:linear-gradient(180deg,#ecd29d,#c99e5c)}
+
+/* réalité augmentée : le panneau se réduit en bandeau */
+body.ar #accueil{position:fixed;top:0;left:0;right:0;min-height:0;gap:.6rem;padding:max(12px,env(safe-area-inset-top)) 16px 12px;
+  background:linear-gradient(rgba(0,0,0,.82),rgba(0,0,0,.55));z-index:10}
+body.ar .eclipse,body.ar .note,body.ar #camera{display:none}
+body.ar h1 .nom{font-size:1.2rem}body.ar h1 .voeux{display:none}
+body.ar .actions{flex-direction:row;max-width:none;justify-content:center}
+body.ar .btn{width:auto;min-height:44px;font-size:.72rem;padding:.5rem 1rem}
+a-scene{position:fixed!important;inset:0;width:100%!important;height:100%!important;z-index:1}
+</style>
+</head>
+<body>
+<main id="accueil">
+  <div class="eclipse" aria-hidden="true"></div>
+  <h1><span class="voeux">Joyeux anniversaire </span><span class="nom">Marylou</span></h1>
+  <div class="actions">
+    <button id="camera" class="btn principal" hidden>Activer la caméra</button>
+    <button id="voir" class="btn principal">Commencer l’aventure</button>
+    <button id="arreter" class="btn" hidden>Arrêter la caméra</button>
+  </div>
+  <p id="status" role="status" aria-live="polite"></p>
+  <p class="note">Monte le son ♪</p>
+</main>
+
+<div id="lecteur" hidden>
+  <video id="video" src="eclipse-tanger.mp4" playsinline webkit-playsinline preload="metadata"></video>
+  <button class="fermer" id="fermer" aria-label="Fermer la vidéo">×</button>
+  <div id="fin" hidden>
+    <button class="btn principal" id="revoir">Revoir</button>
+    <button class="btn" id="retour">Retour</button>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const status = $('#status'), lecteur = $('#lecteur'), video = $('#video'), fin = $('#fin');
+const voir = $('#voir'), camera = $('#camera'), arreter = $('#arreter');
+const CIBLE = './carte.mind', MODELE = './Tanger_Eclipse_v3_AR.glb';
+
+/* ---------- version sans caméra : la vidéo ---------- */
+function ouvrirVideo() {
+  arreterAR();
+  status.textContent = '';
+  lecteur.hidden = false;
+  fin.hidden = true;
+  video.controls = false;
+  video.currentTime = 0;
+  const p = video.play();
+  if (p) p.catch(() => { video.controls = true; });
+}
+function fermerVideo() {
+  video.pause();
+  lecteur.hidden = true;
+}
+voir.addEventListener('click', ouvrirVideo);
+$('#fermer').addEventListener('click', fermerVideo);
+$('#retour').addEventListener('click', fermerVideo);
+$('#revoir').addEventListener('click', () => { fin.hidden = true; video.currentTime = 0; video.play(); });
+video.addEventListener('click', () => { if (!video.controls) video.paused ? video.play() : video.pause(); });
+video.addEventListener('ended', () => { fin.hidden = false; });
+video.addEventListener('error', () => {
+  fermerVideo();
+  status.textContent = 'La vidéo n’a pas pu se charger. Vérifie ta connexion, puis réessaie.';
+});
+
+/* ---------- réalité augmentée : activée seulement si carte.mind est publié ---------- */
+let scene = null, arActive = false;
+
+async function cibleDisponible() {
+  try {
+    const r = await fetch(CIBLE, {method: 'HEAD', cache: 'no-store'});
+    return r.ok && !(r.headers.get('content-type') || '').includes('text/html');
+  } catch { return false; }
+}
+
+function charger(src) {
+  return new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = ok; s.onerror = ko;
+    document.head.append(s);
+  });
+}
+
+function creerScene() {
+  AFRAME.registerComponent('card-animation', {
+    init() {
+      this.tracked = false;
+      this.el.addEventListener('model-loaded', ({detail: {model}}) => {
+        this.mixer = new AFRAME.THREE.AnimationMixer(model);
+        this.actions = model.animations.map(clip => this.mixer.clipAction(clip));
+        if (this.tracked) this.actions.forEach(a => a.reset().play());
+      });
+      const anchor = this.el.parentElement;
+      anchor.addEventListener('targetFound', () => { this.tracked = true; this.actions?.forEach(a => a.reset().play()); });
+      anchor.addEventListener('targetLost', () => { this.tracked = false; this.mixer?.stopAllAction(); });
+    },
+    tick(_, delta) { if (this.tracked) this.mixer?.update(delta / 1000); }
+  });
+
+  const sc = document.createElement('a-scene');
+  sc.setAttribute('mindar-image', `imageTargetSrc: ${CIBLE}; autoStart: false; uiLoading: no; uiScanning: no; uiError: no`);
+  sc.setAttribute('embedded', '');
+  sc.setAttribute('vr-mode-ui', 'enabled: false');
+  sc.setAttribute('device-orientation-permission-ui', 'enabled: false');
+  sc.innerHTML = `
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-entity id="eclipse3d" card-animation gltf-model="url(${MODELE})" scale="0.3 0.3 0.3" position="0 -0.09 0"></a-entity>
+    </a-entity>`;
+  const anchor = sc.querySelector('[mindar-image-target]');
+  const viser = () => { if (arActive) status.textContent = 'Vise le motif de la carte.'; };
+  anchor.addEventListener('targetFound', () => { status.textContent = 'Carte détectée'; });
+  anchor.addEventListener('targetLost', viser);
+  sc.addEventListener('arReady', viser);
+  sc.addEventListener('arError', () => {
+    arreterAR();
+    status.textContent = 'La caméra est refusée ou le suivi n’a pas démarré. Autorise la caméra dans le navigateur, ou regarde la version sans caméra.';
+  });
+  sc.querySelector('#eclipse3d').addEventListener('model-error', () => {
+    status.textContent = 'Le modèle 3D n’a pas pu se charger. Regarde la version sans caméra.';
+  });
+  return new Promise(ok => {
+    sc.addEventListener('loaded', () => ok(sc), {once: true});
+    document.body.append(sc);
+  });
+}
+
+async function demarrerAR() {
+  camera.disabled = true;
+  status.textContent = 'Préparation de la caméra…';
+  try {
+    if (!window.AFRAME) await charger('https://aframe.io/releases/1.5.0/aframe.min.js');
+    if (!AFRAME.components['mindar-image-target']) await charger('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js');
+  } catch {
+    camera.disabled = false;
+    status.textContent = 'Le moteur de réalité augmentée n’a pas chargé. Vérifie ta connexion, ou regarde la version sans caméra.';
+    return;
+  }
+  try {
+    if (!scene) scene = await creerScene();
+    scene.hidden = false;
+    arActive = true;
+    document.body.classList.add('ar');
+    arreter.hidden = false;
+    await scene.systems['mindar-image-system'].start();
+  } catch {
+    arreterAR();
+    status.textContent = 'Le suivi n’a pas démarré. Autorise la caméra, puis réessaie, ou regarde la version sans caméra.';
+  }
+}
+
+function arreterAR() {
+  if (!arActive) return;
+  arActive = false;
+  try { scene?.systems['mindar-image-system'].stop(); } catch {}
+  if (scene) scene.hidden = true;
+  document.body.classList.remove('ar');
+  arreter.hidden = true;
+  camera.disabled = false;
+  status.textContent = '';
+}
+
+camera.addEventListener('click', demarrerAR);
+arreter.addEventListener('click', arreterAR);
+
+cibleDisponible().then(ok => {
+  if (!ok || !navigator.mediaDevices?.getUserMedia) return;
+  camera.hidden = false;
+  voir.classList.remove('principal');
+  voir.textContent = 'Voir sans caméra';
+});
+</script>
+</body>
+</html>
