@@ -62,7 +62,7 @@ a-scene{position:fixed!important;inset:0;width:100%!important;height:100%!import
   <div class="eclipse" aria-hidden="true"></div>
   <h1><span class="voeux">Joyeux anniversaire </span><span class="nom">Marylou</span></h1>
   <div class="actions">
-    <button id="camera" class="btn principal" hidden>Activer la caméra</button>
+    <button id="camera" class="btn principal" hidden>Commencer l’aventure</button>
     <button id="voir" class="btn principal">Commencer l’aventure</button>
     <button id="arreter" class="btn" hidden>Arrêter la caméra</button>
   </div>
@@ -216,6 +216,7 @@ cibleDisponible().then(ok => {
   camera.hidden = false;
   voir.classList.remove('principal');
   voir.textContent = 'Voir sans caméra';
+  status.textContent = 'La caméra va s’ouvrir : vise la feuille dorée de la carte.';
 });
 </script>
 </body>
