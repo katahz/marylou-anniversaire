@@ -10,8 +10,9 @@
 <style>
 :root{--noir:#000;--or:#d9b77a;--or-clair:#f3dfb2;--texte:#e9dcc3;--doux:#9c8a6a;--serif:"Didot","Bodoni 72","Cormorant Garamond",Georgia,"Times New Roman",serif}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%;background:var(--noir);color:var(--texte)}
-body{font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+/* fond noir posé sur html seulement : un fond sur body recouvrirait l'image caméra de MindAR (z-index négatif) */
+html{height:100%;background:var(--noir)}
+body{margin:0;min-height:100%;color:var(--texte);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 button{font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
 [hidden]{display:none!important}
 
@@ -83,7 +84,11 @@ a-scene{position:fixed!important;inset:0;width:100%!important;height:100%!import
 const $ = s => document.querySelector(s);
 const status = $('#status'), lecteur = $('#lecteur'), video = $('#video'), fin = $('#fin');
 const voir = $('#voir'), camera = $('#camera'), arreter = $('#arreter');
-const CIBLE = './carte.mind', MODELE = './Tanger_Eclipse_v3_AR.glb';
+const CIBLE = './carte.mind', MODELE = './Tanger_Eclipse_v3_AR.glb', VIDEO_ALPHA = './eclipse-tanger-transparence.webm';
+// la vidéo transparente (WebM VP9 alpha) n'est pas lue en transparence par Safari : iPhone et Mac gardent le modèle 3D
+const alphaLisible = !/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)
+  && document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
+let videoAlpha = null;
 
 /* ---------- version sans caméra : la vidéo ---------- */
 function ouvrirVideo() {
@@ -150,21 +155,25 @@ function creerScene() {
   sc.setAttribute('embedded', '');
   sc.setAttribute('vr-mode-ui', 'enabled: false');
   sc.setAttribute('device-orientation-permission-ui', 'enabled: false');
+  const contenu = videoAlpha
+    ? `<a-plane width="1.1" height="1.956" position="0 0.25 0.01" material="shader: flat; src: #videoAlpha; transparent: true"></a-plane>`
+    : `<a-entity id="eclipse3d" card-animation gltf-model="url(${MODELE})" scale="0.3 0.3 0.3" position="0 -0.09 0"></a-entity>`;
   sc.innerHTML = `
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <a-entity mindar-image-target="targetIndex: 0">
-      <a-entity id="eclipse3d" card-animation gltf-model="url(${MODELE})" scale="0.3 0.3 0.3" position="0 -0.09 0"></a-entity>
-    </a-entity>`;
+    <a-entity mindar-image-target="targetIndex: 0">${contenu}</a-entity>`;
   const anchor = sc.querySelector('[mindar-image-target]');
-  const viser = () => { if (arActive) status.textContent = 'Vise le motif de la carte.'; };
-  anchor.addEventListener('targetFound', () => { status.textContent = 'Carte détectée'; });
-  anchor.addEventListener('targetLost', viser);
+  const viser = () => { if (arActive) status.textContent = 'Vise la feuille dorée de la carte.'; };
+  anchor.addEventListener('targetFound', () => {
+    status.textContent = 'Carte détectée';
+    videoAlpha?.play().catch(() => {});
+  });
+  anchor.addEventListener('targetLost', () => { videoAlpha?.pause(); viser(); });
   sc.addEventListener('arReady', viser);
   sc.addEventListener('arError', () => {
     arreterAR();
     status.textContent = 'La caméra est refusée ou le suivi n’a pas démarré. Autorise la caméra dans le navigateur, ou regarde la version sans caméra.';
   });
-  sc.querySelector('#eclipse3d').addEventListener('model-error', () => {
+  sc.querySelector('#eclipse3d')?.addEventListener('model-error', () => {
     status.textContent = 'Le modèle 3D n’a pas pu se charger. Regarde la version sans caméra.';
   });
   return new Promise(ok => {
@@ -175,6 +184,15 @@ function creerScene() {
 
 async function demarrerAR() {
   camera.disabled = true;
+  if (alphaLisible && !videoAlpha) {
+    // créée pendant le toucher : le son est ensuite autorisé quand la carte est détectée
+    videoAlpha = Object.assign(document.createElement('video'), {
+      id: 'videoAlpha', src: VIDEO_ALPHA, playsInline: true, preload: 'auto', crossOrigin: 'anonymous'
+    });
+    videoAlpha.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.append(videoAlpha);
+    videoAlpha.play().then(() => videoAlpha.pause()).catch(() => {});
+  }
   status.textContent = 'Préparation de la caméra…';
   try {
     if (!window.AFRAME) await charger('https://aframe.io/releases/1.5.0/aframe.min.js');
@@ -200,6 +218,7 @@ async function demarrerAR() {
 function arreterAR() {
   if (!arActive) return;
   arActive = false;
+  videoAlpha?.pause();
   try { scene?.systems['mindar-image-system'].stop(); } catch {}
   if (scene) scene.hidden = true;
   document.body.classList.remove('ar');
