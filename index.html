@@ -55,6 +55,8 @@ body.ar .eclipse,body.ar .note,body.ar #camera{display:none}
 body.ar h1 .nom{font-size:1.2rem}body.ar h1 .voeux{display:none}
 body.ar .actions{flex-direction:row;max-width:none;justify-content:center}
 body.ar .btn{width:auto;min-height:44px;font-size:.72rem;padding:.5rem 1rem}
+/* vidéo transparente par-dessus la caméra, toujours entière à l'écran */
+#videoAlpha{position:fixed;inset:0;width:100%;height:100%;z-index:15;pointer-events:none;background:transparent;display:none}
 a-scene{position:fixed!important;inset:0;width:100%!important;height:100%!important;z-index:1}
 </style>
 </head>
@@ -84,11 +86,9 @@ a-scene{position:fixed!important;inset:0;width:100%!important;height:100%!import
 const $ = s => document.querySelector(s);
 const status = $('#status'), lecteur = $('#lecteur'), video = $('#video'), fin = $('#fin');
 const voir = $('#voir'), camera = $('#camera'), arreter = $('#arreter');
-const CIBLE = './carte.mind', MODELE = './Tanger_Eclipse_v3_AR.glb', VIDEO_ALPHA = './eclipse-tanger-transparence.webm';
-// la vidéo transparente (WebM VP9 alpha) n'est pas lue en transparence par Safari : iPhone et Mac gardent le modèle 3D
-const alphaLisible = !/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)
-  && document.createElement('video').canPlayType('video/webm; codecs="vp9"') !== '';
-let videoAlpha = null;
+const CIBLE = './carte.mind', VIDEO_ALPHA = './eclipse-tanger-transparence-1080.mp4';
+// vidéo « transparente » en MP4 : image à gauche, masque alpha à droite, recomposés en WebGL (lisible sur iPhone et Android)
+let videoAlpha = null, toile = null;
 
 /* ---------- version sans caméra : la vidéo ---------- */
 function ouvrirVideo() {
@@ -134,47 +134,73 @@ function charger(src) {
   });
 }
 
-function creerScene() {
-  AFRAME.registerComponent('card-animation', {
-    init() {
-      this.tracked = false;
-      this.el.addEventListener('model-loaded', ({detail: {model}}) => {
-        this.mixer = new AFRAME.THREE.AnimationMixer(model);
-        this.actions = model.animations.map(clip => this.mixer.clipAction(clip));
-        if (this.tracked) this.actions.forEach(a => a.reset().play());
-      });
-      const anchor = this.el.parentElement;
-      anchor.addEventListener('targetFound', () => { this.tracked = true; this.actions?.forEach(a => a.reset().play()); });
-      anchor.addEventListener('targetLost', () => { this.tracked = false; this.mixer?.stopAllAction(); });
-    },
-    tick(_, delta) { if (this.tracked) this.mixer?.update(delta / 1000); }
-  });
+/* recompose image + masque en une vidéo transparente, toujours entière à l'écran */
+function lecteurTransparent(video, canvas) {
+  const gl = canvas.getContext('webgl', {alpha: true, premultipliedAlpha: true});
+  if (!gl) return false;
+  const shader = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); return s; };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, shader(gl.VERTEX_SHADER,
+    'attribute vec2 p;varying vec2 uv;void main(){uv=p*.5+.5;gl_Position=vec4(p,0.,1.);}'));
+  gl.attachShader(prog, shader(gl.FRAGMENT_SHADER,
+    'precision mediump float;varying vec2 uv;uniform sampler2D t;void main(){' +
+    'vec3 c=texture2D(t,vec2(uv.x*.5,uv.y)).rgb;float a=texture2D(t,vec2(.5+uv.x*.5,uv.y)).r;gl_FragColor=vec4(c*a,a);}'));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, 'p');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.bindTexture(gl.TEXTURE_2D, gl.createTexture());
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+                        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  const dessiner = () => {
+    if (canvas.style.display === 'block' && video.readyState >= 2) {
+      const cw = canvas.clientWidth, ch = canvas.clientHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2, 1920 / Math.max(cw, ch, 1));
+      const W = Math.round(cw * dpr), H = Math.round(ch * dpr);
+      if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
+      const k = Math.min(W / 1080, H / 1920), w = Math.round(1080 * k), h = Math.round(1920 * k);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.viewport((W - w) >> 1, (H - h) >> 1, w, h);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, video);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+    requestAnimationFrame(dessiner);
+  };
+  requestAnimationFrame(dessiner);
+  return true;
+}
 
+function creerScene() {
   const sc = document.createElement('a-scene');
   sc.setAttribute('mindar-image', `imageTargetSrc: ${CIBLE}; autoStart: false; uiLoading: no; uiScanning: no; uiError: no`);
   sc.setAttribute('embedded', '');
   sc.setAttribute('vr-mode-ui', 'enabled: false');
   sc.setAttribute('device-orientation-permission-ui', 'enabled: false');
-  const contenu = videoAlpha
-    ? `<a-plane width="1.1" height="1.956" position="0 0.25 0.01" material="shader: flat; src: #videoAlpha; transparent: true"></a-plane>`
-    : `<a-entity id="eclipse3d" card-animation gltf-model="url(${MODELE})" scale="0.3 0.3 0.3" position="0 -0.09 0"></a-entity>`;
+  // la scène ne sert qu'à détecter la carte : la vidéo s'affiche ajustée à l'écran (#videoAlpha)
   sc.innerHTML = `
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-    <a-entity mindar-image-target="targetIndex: 0">${contenu}</a-entity>`;
+    <a-entity mindar-image-target="targetIndex: 0"></a-entity>`;
   const anchor = sc.querySelector('[mindar-image-target]');
   const viser = () => { if (arActive) status.textContent = 'Vise la feuille dorée de la carte.'; };
   anchor.addEventListener('targetFound', () => {
     status.textContent = 'Carte détectée';
-    videoAlpha?.play().catch(() => {});
+    if (videoAlpha) {
+      if (videoAlpha.ended) videoAlpha.currentTime = 0;
+      toile.style.display = 'block';
+      videoAlpha.play().catch(() => {});
+    }
   });
-  anchor.addEventListener('targetLost', () => { videoAlpha?.pause(); viser(); });
+  // une fois lancée, la vidéo continue même si la carte sort du cadre
+  anchor.addEventListener('targetLost', () => { if (!videoAlpha || videoAlpha.paused) viser(); });
   sc.addEventListener('arReady', viser);
   sc.addEventListener('arError', () => {
     arreterAR();
     status.textContent = 'La caméra est refusée ou le suivi n’a pas démarré. Autorise la caméra dans le navigateur, ou regarde la version sans caméra.';
-  });
-  sc.querySelector('#eclipse3d')?.addEventListener('model-error', () => {
-    status.textContent = 'Le modèle 3D n’a pas pu se charger. Regarde la version sans caméra.';
   });
   return new Promise(ok => {
     sc.addEventListener('loaded', () => ok(sc), {once: true});
@@ -184,14 +210,16 @@ function creerScene() {
 
 async function demarrerAR() {
   camera.disabled = true;
-  if (alphaLisible && !videoAlpha) {
-    // créée pendant le toucher : le son est ensuite autorisé quand la carte est détectée
-    videoAlpha = Object.assign(document.createElement('video'), {
-      id: 'videoAlpha', src: VIDEO_ALPHA, playsInline: true, preload: 'auto', crossOrigin: 'anonymous'
-    });
-    videoAlpha.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';
-    document.body.append(videoAlpha);
+  if (!videoAlpha) {
+    // créée et lancée pendant le toucher : le son est ensuite autorisé quand la carte est détectée (iPhone compris)
+    videoAlpha = Object.assign(document.createElement('video'), {src: VIDEO_ALPHA, playsInline: true, preload: 'auto'});
+    videoAlpha.setAttribute('playsinline', '');
+    videoAlpha.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    toile = document.createElement('canvas');
+    toile.id = 'videoAlpha';
+    document.body.append(videoAlpha, toile);
     videoAlpha.play().then(() => videoAlpha.pause()).catch(() => {});
+    lecteurTransparent(videoAlpha, toile);
   }
   status.textContent = 'Préparation de la caméra…';
   try {
@@ -218,7 +246,7 @@ async function demarrerAR() {
 function arreterAR() {
   if (!arActive) return;
   arActive = false;
-  videoAlpha?.pause();
+  if (videoAlpha) { videoAlpha.pause(); toile.style.display = 'none'; }
   try { scene?.systems['mindar-image-system'].stop(); } catch {}
   if (scene) scene.hidden = true;
   document.body.classList.remove('ar');
